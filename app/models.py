@@ -9,6 +9,8 @@ import os
 from sqlalchemy import Column, Integer, String, Float
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
+from flask import current_app
+from itsdangerous import (TimedJSONWebSignatureSerializer as Serializer, BadSignature, SignatureExpired)
 
 ROLE_USER = 0
 ROLE_ADMIN = 1
@@ -45,6 +47,7 @@ class ReaderInfo(db.Model):
 	phone = db.Column(db.String(20), unique=True)
 	keep = db.Column(db.SmallInteger)
 
+
 	@property
 	def password(self):
 		raise AttributeError('密码不可读取')
@@ -56,8 +59,24 @@ class ReaderInfo(db.Model):
 	def verify_password(self, password):
 		return check_password_hash(self.password_hash, password)
 
+	def generate_auth_token(self, exporation=600):
+		s = Serializer(app.config['SECRET_KEY'], expires_in=exporation)
+		return s.dumps({'id', self.id})
 
-	def __init__(self, id, name, email, phone, keep):
+	@staticmethod
+	def verify_auth_token(token):
+		app = current_app._get_current_object()
+		s = Serializer(app.config['SECRET_KEY'])
+		try:
+			data = s.loads(token)
+		except SignatureExpired:
+			return None    # valid token, but expired
+		except BadSignature:
+			return None    # invalid token
+		user = ReaderInfo.query.get(data['id'])
+		return user
+
+	def __init__(self, id, name, email, phone, keep=0):
 		self.id = id
 		self.name = name
 		self.email = email
@@ -84,3 +103,6 @@ class BorrowInfo(db.Model):
 		self.starttime = starttime
 		self.planendtime = planendtime
 		self.endtime = endtime
+
+
+

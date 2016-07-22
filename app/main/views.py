@@ -7,12 +7,13 @@
 
 import os
 
-from flask_restful import Resource
-from flask import render_template, request, session
+import uuid
+from flask_restful import Resource, reqparse, abort
+from flask import render_template, request, session, jsonify, g
 from . import main, api
 
 from ..models import BookInfo, BorrowInfo, ReaderInfo
-from .. import db
+from .. import db, auth
 from ..mail import send_email
 
 
@@ -35,11 +36,49 @@ from ..mail import send_email
 #     return render_template('borrows.html',
 #                            borrows=borrows)
 
+parser = reqparse.RequestParser()
+parser.add_argument('username', type=str)
+parser.add_argument('password', type=str)
+
+
+@auth.verify_password
+def verify_password(username_or_token, password):
+    # first try to authenticate by token
+    user = ReaderInfo.verify_auth_token(username_or_token)
+    if not user:
+        # try to authenticate with username/password
+        user = ReaderInfo.query.filter_by(name=username_or_token).first()
+        if not user or not user.verify_password(password):
+            return False
+    g.user = user
+    return True
+
+@main.route('/index')
+def index():
+	return render_template('index.html')
+
 
 class User(Resource):
     """docstring for User"""
 
+    @auth.login_required
     def get(self):
-        return {'hello': "world"}
+        return jsonify({'hello': ""})
+
+    def post(self):
+        args = parser.parse_args()
+        username = args['username']
+        password = args['password']
+        if username is None or password is None:
+            abort(403, message="username or password null")
+        if ReaderInfo.query.filter_by(name=username).first() is not None:
+            abort(409)
+        idd = uuid.uuid4().hex
+        reader = ReaderInfo(id=idd, name=username,
+                            email="web@web.com", phone="12313123")
+        reader.password = password
+        db.session.add(reader)
+        db.session.commit()
+        return jsonify(name=username, password=password)
 
 api.add_resource(User, "/")

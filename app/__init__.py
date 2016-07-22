@@ -10,10 +10,12 @@ import sqlite3
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
+from flask_httpauth import HTTPBasicAuth
 from config import config
 
 mail = Mail()
 db = SQLAlchemy()
+auth = HTTPBasicAuth()
 
 
 def create_app(config_name):
@@ -23,6 +25,7 @@ def create_app(config_name):
 
     mail.init_app(app)
     db.init_app(app)
+    # auth.init_app(app)
 
     from .main import main as main_blueprint
     from .auth import auth as auth_blueprint
